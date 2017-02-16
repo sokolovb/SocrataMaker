@@ -38,7 +38,7 @@ public class SocrataMaker {
         String[] caturl = new String[pagesNumber*20];
         WebElement el;
         int num = 0;
-        for (int i = 2; i <= pagesNumber; i++) {
+        for (int i = 1; i <= pagesNumber; i++) {
             driver.get("https://catalog.data.gov/dataset?res_format=JSON&_res_format_limit=0&page=" + i);
             for (int l = 1; l <= 20; l++) {
                 try {
@@ -156,35 +156,14 @@ public class SocrataMaker {
                 String annotation = field.getAttribute("value");
 
                 //[commands]
-                int count = 0;
-                String atrClass;
-                j = 1;
-                String[] commands = new String[commandsNumber];
-                Arrays.fill(commands, "");
-                do {
-                    temp = driver.findElement(By.xpath(
-                            "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
-                    cat = temp.getText();
-                    atrClass = temp.getAttribute("class");
-
-                    if ((atrClass.equals("cm-keyword")) && (cat.equals("series"))) {
-                        cat = "\n" + cat;
-                        count++;
-                    }
-                    if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
-                        cat += " ";
-                    }
-                    j++;
-                    if (count <= commandsNumber) {
-                        commands[count - 1] += cat;
-                    }
-                } while (count <= commandsNumber);
-
                 //[meta-commands]
-                boolean cond = true, isNotSeries = false;
+                boolean cond = true, isSeries = true;
                 j = 1;
-                count = 0;
+                int countCommands = 0, countMetacommands = 0;
+                String atrClass;
+                String[] commands = new String[commandsNumber];
                 String[] metacommands = new String[metacommandsNumber];
+                Arrays.fill(commands, "");
                 Arrays.fill(metacommands, "");
                 while (cond) {
                     try {
@@ -194,19 +173,26 @@ public class SocrataMaker {
                         atrClass = temp.getAttribute("class");
 
                         if (atrClass.equals("cm-keyword")) {
-                            if (!cat.equals("series")) {
-                                isNotSeries = true;
-                                cat = "\n" + cat;
-                                count++;
+                            cat = "\n" + cat;
+                            if (cat.equals("series")) {
+                                isSeries = true;
+                                countCommands++;
                             } else {
-                                isNotSeries = false;
+                                isSeries = false;
+                                countMetacommands++;
                             }
                         }
                         if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
                             cat += " ";
                         }
-                        if (isNotSeries) {
-                            metacommands[count - 1] += cat;
+                        if (isSeries) {
+                            if (countCommands <= commandsNumber) {
+                                commands[countCommands - 1] += cat;
+                            }
+                        } else {
+                            if (countMetacommands <= metacommandsNumber) {
+                                metacommands[countMetacommands - 1] += cat;
+                            }
                         }
                         j++;
                     } catch (Exception e) {
@@ -266,13 +252,13 @@ public class SocrataMaker {
                                 "\nExcluded Fields = " + excluded +
                                 "\nAnnotation Fields = " + annotation + "\n```\n");
                         out.print("\n[commands]\n```ls");
-                        for (int k = 0; k < commandsNumber; k++) {
-                            out.print(commands[k] + "\n");
+                        for (String command : commands) {
+                            out.print(command + "\n");
                         }
                         out.print("```");
                         out.print("\n[meta-commands]\n```ls");
-                        for (int k = 0; k < count; k++) {
-                            out.print(metacommands[k] + "\n");
+                        for (String metacommand : metacommands) {
+                            out.print(metacommand + "\n");
                         }
                         out.print("```\n");
                     } finally {
