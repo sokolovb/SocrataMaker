@@ -99,15 +99,8 @@ public class SocrataMaker {
                 link = driver.findElement(By.id("btnTest"));
                 link.click();
 
-                //write in file
                 field = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[2]/td[2]"));
                 String name = field.getText();
-                File file = new File("reports/" + name + ".md");
-                if (!file.exists()) {
-                    file.createNewFile();
-                }
-                PrintWriter out = new PrintWriter(file.getAbsoluteFile());
-
 
                 //[dataset]
                 int l, j;
@@ -124,12 +117,6 @@ public class SocrataMaker {
                     data += temp.getText();
                     data += "\n";
                 }
-
-                out.print("[dataset]\n```property" +
-                        "\nURL = " + url[i] +
-                        "\nCatalog URL = " + caturl[i] +
-                        data + "```\n\n");
-
 
                 //[columns]
                 int rowsNumber = driver.findElements(By.xpath("//*[@id=\"tblColumnInfos\"]/tbody/tr")).size();
@@ -148,47 +135,12 @@ public class SocrataMaker {
                     }
                 }
 
-                int[] offset = new int[columnsNumber];
-                int max;
-                out.print("[columns]\n```ls\n");
-                for (int i1 = 0; i1 < columnsNumber; i1++) {
-                    max = 0;
-                    for (int i2 = 0; i2 < rowsNumber - 1; i2++) {
-                        if (cols[i2][i1].length() > max) {
-                            max = cols[i2][i1].length();
-                        }
-                    }
-                    offset[i1] = max;
-                }
-                for (int i1 = 0; i1 < rowsNumber - 1; i1++) {
-                    if (i1 == 1) {
-                        out.print("| ");
-                        for (int i2 = 0; i2 < columnsNumber; i2++) {
-                            for (int i3 = 0; i3 < offset[i2]; i3++) {
-                                out.print("=");
-                            }
-                            out.print(" | ");
-                        }
-                        out.print("\n");
-                    }
-                    out.print("| ");
-                    for (int i2 = 0; i2 < columnsNumber; i2++) {
-                        out.printf("%-" + offset[i2] + "s | ", cols[i1][i2]);
-                    }
-                    out.print("\n");
-                }
-                out.print("```\n");
-
                 //[time]
                 field = driver.findElement(By.id("timeField_0"));
                 String time = field.getAttribute("value");
 
                 field = driver.findElement(By.id("timeFormat_0"));
                 String format = field.getAttribute("value");
-
-                out.print("\n[time]\n```ls" +
-                        "\nValue = " + time +
-                        "\nFormat & Zone = " + format + "\n```\n");
 
                 //[series]
                 field = driver.findElement(By.id("metricPrefix_0"));
@@ -203,14 +155,9 @@ public class SocrataMaker {
                 field = driver.findElement(By.id("annotationFields_0"));
                 String annotation = field.getAttribute("value");
 
-                out.print("\n[series]\n```ls" +
-                        "\nMetric Prefix = " + prefix +
-                        "\nIncluded Fields = " + included +
-                        "\nExcluded Fields = " + excluded +
-                        "\nAnnotation Fields = " + annotation + "\n```\n");
-
                 //[commands]
                 int count = 0;
+                String atrClass;
                 j = 1;
                 String[] commands = new String[commandsNumber];
                 Arrays.fill(commands, "");
@@ -218,13 +165,13 @@ public class SocrataMaker {
                     temp = driver.findElement(By.xpath(
                             "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
                     cat = temp.getText();
+                    atrClass = temp.getAttribute("class");
 
-                    if ((temp.getAttribute("class").equals("cm-keyword")) && (temp.getText().equals("series"))) {
+                    if ((atrClass.equals("cm-keyword")) && (cat.equals("series"))) {
                         cat = "\n" + cat;
                         count++;
                     }
-                    if ((temp.getAttribute("class").equals("cm-keyword")) ||
-                            temp.getAttribute("class").equals("cm-attribute")) {
+                    if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
                         cat += " ";
                     }
                     j++;
@@ -232,12 +179,6 @@ public class SocrataMaker {
                         commands[count - 1] += cat;
                     }
                 } while (count <= commandsNumber);
-
-                out.print("\n[commands]\n```ls");
-                for (int k = 0; k < commandsNumber; k++) {
-                    out.print(commands[k] + "\n");
-                }
-                out.print("```\n");
 
                 //[meta-commands]
                 boolean cond = true, isNotSeries = false;
@@ -250,16 +191,18 @@ public class SocrataMaker {
                         temp = driver.findElement(By.xpath(
                                 "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
                         cat = temp.getText();
-                        if ((temp.getAttribute("class").equals("cm-keyword")) && (!temp.getText().equals("series"))) {
-                            isNotSeries = true;
-                            cat = "\n" + cat;
-                            count++;
+                        atrClass = temp.getAttribute("class");
+
+                        if (atrClass.equals("cm-keyword")) {
+                            if (!cat.equals("series")) {
+                                isNotSeries = true;
+                                cat = "\n" + cat;
+                                count++;
+                            } else {
+                                isNotSeries = false;
+                            }
                         }
-                        if ((temp.getAttribute("class").equals("cm-keyword")) && (temp.getText().equals("series"))) {
-                            isNotSeries = false;
-                        }
-                        if ((temp.getAttribute("class").equals("cm-keyword")) ||
-                                temp.getAttribute("class").equals("cm-attribute")) {
+                        if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
                             cat += " ";
                         }
                         if (isNotSeries) {
@@ -271,12 +214,73 @@ public class SocrataMaker {
                     }
                 }
 
-                out.print("\n[meta-commands]\n```ls");
-                for (int k = 0; k < count; k++) {
-                    out.print(metacommands[k] + "\n");
+                //write in file
+                File file = new File("reports/" + name + ".md");
+                int[] offset = new int[columnsNumber];
+                int max;
+                try {
+                    if (!file.exists()) {
+                        file.createNewFile();
+                    }
+                    PrintWriter out = new PrintWriter(file.getAbsoluteFile());
+                    try {
+                        out.print("[dataset]\n```property" +
+                                "\nURL = " + url[i] +
+                                "\nCatalog URL = " + caturl[i] +
+                                data + "```\n\n");
+                        out.print("[columns]\n```ls\n");
+                        for (int i1 = 0; i1 < columnsNumber; i1++) {
+                            max = 0;
+                            for (int i2 = 0; i2 < rowsNumber - 1; i2++) {
+                                if (cols[i2][i1].length() > max) {
+                                    max = cols[i2][i1].length();
+                                }
+                            }
+                            offset[i1] = max;
+                        }
+                        for (int i1 = 0; i1 < rowsNumber - 1; i1++) {
+                            if (i1 == 1) {
+                                out.print("| ");
+                                for (int i2 = 0; i2 < columnsNumber; i2++) {
+                                    for (int i3 = 0; i3 < offset[i2]; i3++) {
+                                        out.print("=");
+                                    }
+                                    out.print(" | ");
+                                }
+                                out.print("\n");
+                            }
+                            out.print("| ");
+                            for (int i2 = 0; i2 < columnsNumber; i2++) {
+                                out.printf("%-" + offset[i2] + "s | ", cols[i1][i2]);
+                            }
+                            out.print("\n");
+                        }
+                        out.print("```\n");
+
+                        out.print("\n[time]\n```ls" +
+                                "\nValue = " + time +
+                                "\nFormat & Zone = " + format + "\n```\n");
+                        out.print("\n[series]\n```ls" +
+                                "\nMetric Prefix = " + prefix +
+                                "\nIncluded Fields = " + included +
+                                "\nExcluded Fields = " + excluded +
+                                "\nAnnotation Fields = " + annotation + "\n```\n");
+                        out.print("\n[commands]\n```ls");
+                        for (int k = 0; k < commandsNumber; k++) {
+                            out.print(commands[k] + "\n");
+                        }
+                        out.print("```");
+                        out.print("\n[meta-commands]\n```ls");
+                        for (int k = 0; k < count; k++) {
+                            out.print(metacommands[k] + "\n");
+                        }
+                        out.print("```\n");
+                    } finally {
+                        out.close();
+                    }
+                } catch (IOException e) {
+                    throw new RuntimeException();
                 }
-                out.print("```\n");
-                out.close();
 
             }
         }
