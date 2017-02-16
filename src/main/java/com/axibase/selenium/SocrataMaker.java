@@ -5,6 +5,7 @@ package com.axibase.selenium;
  * parse some datasets from catalog.data.gov with some info via ATSD Collector
  */
 
+import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.*;
 import org.openqa.selenium.chrome.ChromeDriver;
 /*
@@ -16,12 +17,23 @@ import org.openqa.selenium.remote.DesiredCapabilities;
 import java.io.*;
 import java.util.Arrays;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class SocrataMaker {
     private static final int commandsNumber = 3;
     private static final int metacommandsNumber = 100;
     private static final int columnsNumber = 6;
-    private static final int pagesNumber = 5;
+    private static final int pagesNumber = 600;
+
+    public static void log (String msg) {
+        File file = new File("SocrataMaker.log");
+        try {
+            file.createNewFile();
+            FileUtils.writeStringToFile(file, msg + "\n", true);
+        } catch (Exception ignored) {}
+    }
+
     public static void main (String[] args) throws InterruptedException, IOException {
 /*
         DesiredCapabilities caps = new DesiredCapabilities();
@@ -31,27 +43,10 @@ public class SocrataMaker {
                 new String[] {"--web-security=no", "--ignore-ssl-errors=yes"});
         WebDriver driver = new PhantomJSDriver(caps);
 */
+        log("Initializing...");
+
         System.setProperty("webdriver.chrome.driver", "chromedriver");
         WebDriver driver = new ChromeDriver();
-
-        String[] url = new String[pagesNumber*20];
-        String[] caturl = new String[pagesNumber*20];
-        WebElement el;
-        int num = 0;
-        for (int i = 1; i <= pagesNumber; i++) {
-            driver.get("https://catalog.data.gov/dataset?res_format=JSON&_res_format_limit=0&page=" + i);
-            for (int l = 5; l <= 20; l++) {
-                try {
-                    el = driver.findElement(By.xpath(
-                            "//*[@id=\"content\"]/div[2]/div/section[1]/div[2]/ul/li["+l+"]/div/ul/li[3]/a"));
-                    url[num] = el.getAttribute("href");
-                    el = driver.findElement(By.xpath(
-                            "//*[@id=\"content\"]/div[2]/div/section[1]/div[2]/ul/li["+l+"]/div/h3/a"));
-                    caturl[num] = el.getAttribute("href");
-                    num++;
-                } catch (Exception ignored) {}
-            }
-        }
 
         //load properties
         Properties pr = new Properties();
@@ -64,6 +59,37 @@ public class SocrataMaker {
         String collector = pr.getProperty("collector");
         String username = pr.getProperty("username");
         String password = pr.getProperty("password");
+        String[] url = pr.getProperty("url").split(";");
+        String[] caturl = new String[url.length];
+        Arrays.fill(caturl, "");
+
+        //find url in catalog.data.gov
+        String[] pair = pr.getProperty("urlBase").split(";");
+        String[] urlBase = new String[pair.length];
+        String[] caturlBase = new String[pair.length];
+        for (int i = 0; i < pair.length; i++) {
+            String[] split = pair[i].split(",");
+            urlBase[i] = split[0];
+            caturlBase[i] = split[1];
+        }
+
+        Pattern pattern = Pattern.compile(".*(?=/)");
+
+        log("Start parsing catalog url...");
+
+        for (int i = 0; i < url.length; i++) {
+            for (int j = 0; j < urlBase.length; j++) {
+                Matcher matcher = pattern.matcher(urlBase[j]);
+                if (matcher.find()) {
+                    if (url[i].equals(matcher.group())) {
+                        caturl[i] = caturlBase[j];
+                    }
+                }
+            }
+        }
+
+        log("parsing finished");
+        log("entering collector...");
 
         //authentication
         driver.get(collector);
@@ -72,6 +98,8 @@ public class SocrataMaker {
         field = driver.findElement(By.name("password"));
         field.sendKeys(password);
         field.submit();
+
+        log("success");
 
         for (int i = 0; i < url.length; i++) {
 
@@ -89,6 +117,8 @@ public class SocrataMaker {
             link = driver.findElement(By.linkText("Create Configuration"));
             link.click();
 
+            log("adding new Socrata job...");
+
             field = driver.findElement(By.name("path"));
             field.sendKeys(url[i]);
 
@@ -99,8 +129,12 @@ public class SocrataMaker {
                 link = driver.findElement(By.id("btnTest"));
                 link.click();
 
+                log("added");
+
                 field = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[2]/td[2]"));
                 String name = field.getText();
+
+                log("parsing dataset...");
 
                 //[dataset]
                 int l, j;
@@ -117,6 +151,8 @@ public class SocrataMaker {
                     data += temp.getText();
                     data += "\n";
                 }
+
+                log("parsing columns...");
 
                 //[columns]
                 int rowsNumber = driver.findElements(By.xpath("//*[@id=\"tblColumnInfos\"]/tbody/tr")).size();
@@ -135,12 +171,16 @@ public class SocrataMaker {
                     }
                 }
 
+                log("parsing time...");
+
                 //[time]
                 field = driver.findElement(By.id("timeField_0"));
                 String time = field.getAttribute("value");
 
                 field = driver.findElement(By.id("timeFormat_0"));
                 String format = field.getAttribute("value");
+
+                log("parsing series");
 
                 //[series]
                 field = driver.findElement(By.id("metricPrefix_0"));
@@ -154,6 +194,8 @@ public class SocrataMaker {
 
                 field = driver.findElement(By.id("annotationFields_0"));
                 String annotation = field.getAttribute("value");
+
+                log("parsing commands...");
 
                 //[commands]
                 int count = 0;
@@ -183,6 +225,8 @@ public class SocrataMaker {
                         commands[count - 1] += cat;
                     }
                 } while (count <= commandsNumber);
+
+                log("parsing meta-commands...");
 
                 //[meta-commands]
                 count = 0;
@@ -216,6 +260,9 @@ public class SocrataMaker {
                         tempString = cat + tempString;
                     }
                 }
+                int mcN = count;
+
+                log("writing in file...");
 
                 //write in file
                 File file = new File("reports/" + name + ".md");
@@ -274,7 +321,7 @@ public class SocrataMaker {
                         }
                         out.print("\n```\n");
                         out.print("\n[meta-commands]\n```ls");
-                        for (int k = 0; k < metacommands.length; k++) {
+                        for (int k = mcN-1; k >= 0; k--) {
                             out.print(metacommands[k].equals("") ? "" : metacommands[k] + "\n");
                         }
                         out.print("\n```");
@@ -284,7 +331,7 @@ public class SocrataMaker {
                 } catch (IOException e) {
                     throw new RuntimeException();
                 }
-
+                log("finished!");
             }
         }
         driver.quit();
