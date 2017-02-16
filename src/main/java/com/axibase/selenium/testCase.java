@@ -11,7 +11,7 @@ public class testCase {
         System.setProperty("webdriver.chrome.driver", "chromedriver");
         WebDriver driver = new ChromeDriver();
 
-        String url = new String("https://data.cdc.gov/api/views/mr8w-325u/rows.json?accessType=DOWNLOAD");
+        String url = "https://data.cdc.gov/api/views/mr8w-325u/rows.json?accessType=DOWNLOAD";
 
         Properties pr = new Properties();
         try {
@@ -46,7 +46,13 @@ public class testCase {
         link = driver.findElement(By.id("btnAdd"));
         link.click();
 
-        //*[@id="testRow_2"]/td/table/tbody/tr[3]/td[2]/pre/span[6364]
+        link = driver.findElement(By.id("btnTest"));
+        link.click();
 
+        System.out.print(driver.findElements(By.xpath(
+                "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span")).size()); // = 6364
+
+        driver.quit();
     }
 }
+//*[@id="testRow_2"]/td/table/tbody/tr[3]/td[2]/pre/span[6364]

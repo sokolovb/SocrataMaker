@@ -40,7 +40,7 @@ public class SocrataMaker {
         int num = 0;
         for (int i = 1; i <= pagesNumber; i++) {
             driver.get("https://catalog.data.gov/dataset?res_format=JSON&_res_format_limit=0&page=" + i);
-            for (int l = 1; l <= 20; l++) {
+            for (int l = 5; l <= 20; l++) {
                 try {
                     el = driver.findElement(By.xpath(
                             "//*[@id=\"content\"]/div[2]/div/section[1]/div[2]/ul/li["+l+"]/div/ul/li[3]/a"));
@@ -156,47 +156,64 @@ public class SocrataMaker {
                 String annotation = field.getAttribute("value");
 
                 //[commands]
-                //[meta-commands]
-                boolean cond = true, isSeries = true;
+                int count = 0;
                 j = 1;
-                int countCommands = 0, countMetacommands = 0;
                 String atrClass;
                 String[] commands = new String[commandsNumber];
-                String[] metacommands = new String[metacommandsNumber];
                 Arrays.fill(commands, "");
-                Arrays.fill(metacommands, "");
-                while (cond) {
-                    try {
-                        temp = driver.findElement(By.xpath(
-                                "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
-                        cat = temp.getText();
-                        atrClass = temp.getAttribute("class");
+                do {
+                    temp = driver.findElement(By.xpath(
+                            "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
+                    cat = temp.getText();
+                    atrClass = temp.getAttribute("class");
 
-                        if (atrClass.equals("cm-keyword")) {
+                    if (atrClass.equals("cm-keyword")) {
+                        if (cat.equals("series")) {
                             cat = "\n" + cat;
-                            if (cat.equals("series")) {
-                                isSeries = true;
-                                countCommands++;
-                            } else {
-                                isSeries = false;
-                                countMetacommands++;
-                            }
-                        }
-                        if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
-                            cat += " ";
-                        }
-                        if (isSeries) {
-                            if (countCommands <= commandsNumber) {
-                                commands[countCommands - 1] += cat;
-                            }
+                            count++;
                         } else {
-                            if (countMetacommands <= metacommandsNumber) {
-                                metacommands[countMetacommands - 1] += cat;
-                            }
+                            break;
                         }
-                        j++;
-                    } catch (Exception e) {
-                        cond = false;
+                    }
+                    if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
+                        cat += " ";
+                    }
+                    j++;
+                    if (count <= commandsNumber) {
+                        commands[count - 1] += cat;
+                    }
+                } while (count <= commandsNumber);
+
+                //[meta-commands]
+                count = 0;
+                String[] metacommands = new String[metacommandsNumber];
+                Arrays.fill(metacommands, "");
+                String tempString = "";
+                for (j = driver.findElements(By.xpath(
+                        "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span")).size(); j > 0; j--) {
+                    temp = driver.findElement(By.xpath(
+                            "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
+                    cat = temp.getText();
+                    atrClass = temp.getAttribute("class");
+
+                    if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
+                        cat += " ";
+                    }
+                    if (atrClass.equals("cm-keyword")) {
+                        cat = "\n" + cat;
+                        if (!cat.equals("series")) {
+                            if (count < metacommandsNumber) {
+                                metacommands[count] = cat + tempString;
+                            } else  {
+                                break;
+                            }
+                            tempString = "";
+                            count++;
+                        } else {
+                            break;
+                        }
+                    } else {
+                        tempString = cat + tempString;
                     }
                 }
 
@@ -252,15 +269,15 @@ public class SocrataMaker {
                                 "\nExcluded Fields = " + excluded +
                                 "\nAnnotation Fields = " + annotation + "\n```\n");
                         out.print("\n[commands]\n```ls");
-                        for (String command : commands) {
-                            out.print(command + "\n");
+                        for (int k = 0; k < commands.length; k++) {
+                            out.print(commands[k].equals("") ? "" : commands[k] + "\n");
                         }
-                        out.print("```");
+                        out.print("\n```\n");
                         out.print("\n[meta-commands]\n```ls");
-                        for (String metacommand : metacommands) {
-                            out.print(metacommand + "\n");
+                        for (int k = 0; k < metacommands.length; k++) {
+                            out.print(metacommands[k].equals("") ? "" : metacommands[k] + "\n");
                         }
-                        out.print("```\n");
+                        out.print("\n```");
                     } finally {
                         out.close();
                     }
