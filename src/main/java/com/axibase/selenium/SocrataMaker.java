@@ -15,7 +15,9 @@ import org.openqa.selenium.remote.DesiredCapabilities;
 */
 
 import java.io.*;
+import java.text.SimpleDateFormat;
 import java.util.Arrays;
+import java.util.Calendar;
 import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,7 +32,8 @@ public class SocrataMaker {
         File file = new File("SocrataMaker.log");
         try {
             file.createNewFile();
-            FileUtils.writeStringToFile(file, msg + "\n", true);
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime());
+            FileUtils.writeStringToFile(file, timeStamp + ": " + msg + "\n", true);
         } catch (Exception ignored) {}
     }
 
@@ -140,16 +143,24 @@ public class SocrataMaker {
                 int l, j;
                 String cat;
                 int datasetlen = driver.findElements(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr")).size();
-                String data = "\n";
+                String data = "\n", desc = "";
                 WebElement temp;
                 //contents
                 for (l = 2; l <= datasetlen; l++) {
                     temp = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[1]"));
-                    data += temp.getText();
-                    data += " = ";
-                    temp = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]"));
-                    data += temp.getText();
-                    data += "\n";
+                    if (!temp.getText().equals("Description")) {
+                        data += temp.getText();
+                        data += " = ";
+                        temp = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]"));
+                        data += temp.getText();
+                        data += "\n";
+                    } else {
+                        temp = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]"));
+                        temp.click();
+                        temp = driver.findElement(By.xpath(
+                                "//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]/div/div[2]/div"));
+                        desc = temp.getText();
+                    }
                 }
 
                 log("parsing columns...");
@@ -245,7 +256,7 @@ public class SocrataMaker {
                     }
                     if (atrClass.equals("cm-keyword")) {
                         cat = "\n" + cat;
-                        if (!cat.equals("series")) {
+                        if (!cat.equals("\nseries ")) {
                             if (count < metacommandsNumber) {
                                 metacommands[count] = cat + tempString;
                             } else  {
@@ -278,6 +289,7 @@ public class SocrataMaker {
                                 "\nURL = " + url[i] +
                                 "\nCatalog URL = " + caturl[i] +
                                 data + "```\n\n");
+                        out.print("[description]\n```ls\n" + desc + "\n```\n\n");
                         out.print("[columns]\n```ls\n");
                         for (int i1 = 0; i1 < columnsNumber; i1++) {
                             max = 0;
