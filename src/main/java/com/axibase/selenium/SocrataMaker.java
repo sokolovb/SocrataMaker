@@ -26,14 +26,23 @@ public class SocrataMaker {
     private static final int commandsNumber = 3;
     private static final int metacommandsNumber = 100;
     private static final int columnsNumber = 6;
-    private static final int pagesNumber = 600;
+
+    private static File file = new File("SocrataMaker.log");
 
     public static void log (String msg) {
-        File file = new File("SocrataMaker.log");
         try {
-            file.createNewFile();
-            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(Calendar.getInstance().getTime());
+            if (!file.exists()) {
+                file.createNewFile();
+            }
+            String timeStamp = new SimpleDateFormat("yyyy.MM.dd_HH:mm:ss").format(Calendar.getInstance().getTime());
             FileUtils.writeStringToFile(file, timeStamp + ": " + msg + "\n", true);
+        } catch (Exception ignored) {}
+    }
+
+    public static void logRefresh () {
+        try {
+            PrintWriter out = new PrintWriter(file.getAbsoluteFile());
+            out.print("");
         } catch (Exception ignored) {}
     }
 
@@ -46,6 +55,8 @@ public class SocrataMaker {
                 new String[] {"--web-security=no", "--ignore-ssl-errors=yes"});
         WebDriver driver = new PhantomJSDriver(caps);
 */
+        logRefresh();
+
         log("Initializing...");
 
         System.setProperty("webdriver.chrome.driver", "chromedriver");
@@ -132,10 +143,10 @@ public class SocrataMaker {
                 link = driver.findElement(By.id("btnTest"));
                 link.click();
 
-                log("added");
-
                 field = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[2]/td[2]"));
                 String name = field.getText();
+
+                log("Socrata job for entity " + name + " added");
 
                 log("parsing dataset...");
 
