@@ -7,18 +7,18 @@ package com.axibase.selenium;
 
 import org.apache.commons.io.FileUtils;
 import org.openqa.selenium.*;
-import org.openqa.selenium.chrome.ChromeDriver;
-/*
+//import org.openqa.selenium.chrome.ChromeDriver;
+
 import org.openqa.selenium.phantomjs.PhantomJSDriver;
 import org.openqa.selenium.phantomjs.PhantomJSDriverService;
 import org.openqa.selenium.remote.DesiredCapabilities;
-*/
 
 import java.io.*;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -27,40 +27,40 @@ public class SocrataMaker {
     private static final int metacommandsNumber = 100;
     private static final int columnsNumber = 6;
 
-    private static File file = new File("SocrataMaker.log");
+    private static File logFile = new File("SocrataMaker.log");
 
     public static void log (String msg) {
         try {
-            if (!file.exists()) {
-                file.createNewFile();
+            if (!logFile.exists()) {
+                logFile.createNewFile();
             }
             String timeStamp = new SimpleDateFormat("yyyy.MM.dd_HH:mm:ss").format(Calendar.getInstance().getTime());
-            FileUtils.writeStringToFile(file, timeStamp + ": " + msg + "\n", true);
+            FileUtils.writeStringToFile(logFile, timeStamp + ": " + msg + "\n", true);
         } catch (Exception ignored) {}
     }
 
     public static void logRefresh () {
         try {
-            PrintWriter out = new PrintWriter(file.getAbsoluteFile());
+            PrintWriter out = new PrintWriter(logFile.getAbsoluteFile());
             out.print("");
         } catch (Exception ignored) {}
     }
 
     public static void main (String[] args) throws InterruptedException, IOException {
-/*
-        DesiredCapabilities caps = new DesiredCapabilities();
-        caps.setCapability(PhantomJSDriverService.PHANTOMJS_EXECUTABLE_PATH_PROPERTY,
-                "/home/user/Downloads/phantomjs-1.9.8-linux-x86_64/bin/phantomjs");
-        caps.setCapability(PhantomJSDriverService.PHANTOMJS_CLI_ARGS,
-                new String[] {"--web-security=no", "--ignore-ssl-errors=yes"});
-        WebDriver driver = new PhantomJSDriver(caps);
-*/
+
         logRefresh();
 
         log("Initializing...");
 
+        DesiredCapabilities caps = new DesiredCapabilities();
+        caps.setCapability(PhantomJSDriverService.PHANTOMJS_EXECUTABLE_PATH_PROPERTY,"phantomjs");
+        caps.setCapability(PhantomJSDriverService.PHANTOMJS_CLI_ARGS,
+                new String[] {"--web-security=no", "--ignore-ssl-errors=yes"});
+
+/*
         System.setProperty("webdriver.chrome.driver", "chromedriver");
         WebDriver driver = new ChromeDriver();
+*/
 
         //load properties
         Properties pr = new Properties();
@@ -75,8 +75,23 @@ public class SocrataMaker {
         String password = pr.getProperty("password");
         String[] url = pr.getProperty("url").split(";");
         String[] caturl = new String[url.length];
-        Arrays.fill(caturl, "");
 
+
+        try {
+            FileInputStream f = new FileInputStream("src/main/resources/url.properties");
+            pr.load(f);
+        } catch (Exception e) {
+            System.out.println("property file is not loaded");
+        }
+
+        for (int i = 0; i < url.length; i++) {
+            if (pr.getProperty(url[i]) != null)
+                caturl[i] = pr.getProperty(url[i]);
+            else if (pr.getProperty(url[i] + "/rows.json?accessType=DOWNLOAD") != null)
+                    caturl[i] = pr.getProperty(url[i] + "/rows.json?accessType=DOWNLOAD");
+            else caturl[i] = "";
+        }
+/*
         //find url in catalog.data.gov
         String[] pair = pr.getProperty("urlBase").split(";");
         String[] urlBase = new String[pair.length];
@@ -103,9 +118,10 @@ public class SocrataMaker {
         }
 
         log("parsing finished");
-        log("entering collector...");
+*/        log("entering collector...");
 
         //authentication
+        WebDriver driver = new PhantomJSDriver(caps);
         driver.get(collector);
         WebElement field = driver.findElement(By.id("username"));
         field.sendKeys(username);
@@ -113,46 +129,44 @@ public class SocrataMaker {
         field.sendKeys(password);
         field.submit();
 
-        log("success");
+        log("entered");
 
         for (int i = 0; i < url.length; i++) {
+
+            log("Adding new Socrata job...");
 
             WebElement link = driver.findElement(By.linkText("Jobs"));
             link.click();
 
-            //if previuos socrata job failed
-            try {
-                Alert alert = driver.switchTo().alert();
-                alert.accept();
-            } catch (Exception ignored) {}
-
             link = driver.findElement(By.linkText("autosocrata"));
             link.click();
-            link = driver.findElement(By.linkText("Create Configuration"));
+
+            link = driver.findElement(By.linkText("Create from URL"));
             link.click();
+            driver.manage().timeouts().implicitlyWait(1, TimeUnit.SECONDS);
 
-            log("adding new Socrata job...");
-
-            field = driver.findElement(By.name("path"));
+            field = driver.findElement(By.id("inputWizardUrl"));
+            driver.manage().timeouts().implicitlyWait(3, TimeUnit.SECONDS);
             field.sendKeys(url[i]);
 
-            link = driver.findElement(By.id("btnAdd"));
+            link = driver.findElement(By.id("btnWizardCreate"));
             link.click();
 
-            if (!driver.findElement(By.id("name")).getAttribute("value").equals("")) {
-                link = driver.findElement(By.id("btnTest"));
-                link.click();
+            WebElement nameField = driver.findElement(By.id("name"));
+            String check = nameField.getAttribute("value");
+
+            if (!check.equals("")) {
 
                 field = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[2]/td[2]"));
+                driver.manage().timeouts().implicitlyWait(1, TimeUnit.SECONDS);
                 String name = field.getText();
 
-                log("Socrata job for entity " + name + " added");
+                log("Socrata job for entity " + name + " is added");
 
                 log("parsing dataset...");
 
                 //[dataset]
                 int l, j;
-                String cat;
                 int datasetlen = driver.findElements(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr")).size();
                 String data = "\n", desc = "";
                 WebElement temp;
@@ -166,11 +180,9 @@ public class SocrataMaker {
                         data += temp.getText();
                         data += "\n";
                     } else {
-                        temp = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]"));
-                        temp.click();
-                        temp = driver.findElement(By.xpath(
-                                "//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]/div/div[2]/div"));
-                        desc = temp.getText();
+                        temp = driver.findElement(By.xpath("//*[@id=\"tblSummaryInfo\"]/tbody/tr[" + l + "]/td[2]/a"));
+                        desc = temp.getAttribute("data-content").substring(92,
+                                temp.getAttribute("data-content").length()-6);
                     }
                 }
 
@@ -202,7 +214,7 @@ public class SocrataMaker {
                 field = driver.findElement(By.id("timeFormat_0"));
                 String format = field.getAttribute("value");
 
-                log("parsing series");
+                log("parsing series...");
 
                 //[series]
                 field = driver.findElement(By.id("metricPrefix_0"));
@@ -217,69 +229,27 @@ public class SocrataMaker {
                 field = driver.findElement(By.id("annotationFields_0"));
                 String annotation = field.getAttribute("value");
 
-                log("parsing commands...");
+                log("parsing commands & meta-commands...");
 
-                //[commands]
+                //[commands] & [meta-commands]
                 int count = 0;
-                j = 1;
-                String atrClass;
                 String[] commands = new String[commandsNumber];
-                Arrays.fill(commands, "");
-                do {
-                    temp = driver.findElement(By.xpath(
-                            "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
-                    cat = temp.getText();
-                    atrClass = temp.getAttribute("class");
-
-                    if (atrClass.equals("cm-keyword")) {
-                        if (cat.equals("series")) {
-                            cat = "\n" + cat;
-                            count++;
-                        } else {
-                            break;
-                        }
-                    }
-                    if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
-                        cat += " ";
-                    }
-                    j++;
-                    if (count <= commandsNumber) {
-                        commands[count - 1] += cat;
-                    }
-                } while (count <= commandsNumber);
-
-                log("parsing meta-commands...");
-
-                //[meta-commands]
-                count = 0;
                 String[] metacommands = new String[metacommandsNumber];
-                Arrays.fill(metacommands, "");
-                String tempString = "";
-                for (j = driver.findElements(By.xpath(
-                        "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span")).size(); j > 0; j--) {
-                    temp = driver.findElement(By.xpath(
-                            "//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]/pre/span[" + j + "]"));
-                    cat = temp.getText();
-                    atrClass = temp.getAttribute("class");
 
-                    if ((atrClass.equals("cm-keyword")) || atrClass.equals("cm-attribute")) {
-                        cat += " ";
+                temp = driver.findElement(By.xpath("//*[@id=\"testRow_2\"]/td/table/tbody/tr[3]/td[2]"));
+
+                String[] strings = temp.getText().split("\n");
+
+                for (j = 0; j < commandsNumber; j++) {
+                    if (strings[j].substring(0, 6).equals("series")) {
+                        commands[count++] = "\n" + strings[j];
                     }
-                    if (atrClass.equals("cm-keyword")) {
-                        cat = "\n" + cat;
-                        if (!cat.equals("\nseries ")) {
-                            if (count < metacommandsNumber) {
-                                metacommands[count] = cat + tempString;
-                            } else  {
-                                break;
-                            }
-                            tempString = "";
-                            count++;
-                        } else {
-                            break;
-                        }
-                    } else {
-                        tempString = cat + tempString;
+                }
+
+                count = 0;
+                for (j = strings.length-1; j >= 0; j--) {
+                    if (!strings[j].substring(0, 6).equals("series")) {
+                        metacommands[count++] = "\n" + strings[j];
                     }
                 }
                 int mcN = count;
@@ -340,12 +310,12 @@ public class SocrataMaker {
                                 "\nAnnotation Fields = " + annotation + "\n```\n");
                         out.print("\n[commands]\n```ls");
                         for (int k = 0; k < commands.length; k++) {
-                            out.print(commands[k].equals("") ? "" : commands[k] + "\n");
+                            out.print(commands[k] == null ? "" : commands[k] + "\n");
                         }
                         out.print("\n```\n");
                         out.print("\n[meta-commands]\n```ls");
                         for (int k = mcN-1; k >= 0; k--) {
-                            out.print(metacommands[k].equals("") ? "" : metacommands[k] + "\n");
+                            out.print(metacommands[k] == null ? "" : metacommands[k] + "\n");
                         }
                         out.print("\n```");
                     } finally {
